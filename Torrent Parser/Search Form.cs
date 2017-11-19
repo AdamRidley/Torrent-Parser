@@ -7,17 +7,16 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Text.RegularExpressions;
 
 namespace Torrent_Parser
 {
     public partial class SearchForm : Form
     {
+        TPBScraper scraper = new TPBScraper();
         public CConfigMng oConfigMng = new CConfigMng();
-        string proxyBayUrl = @"https://proxybay.one/list.txt";
-        string googleCache = @"http://webcache.googleusercontent.com/search?q=cache%3Awww.proxybay.one%2Flist.txt";
         string searchAppendage = @"/search/$s/0/7/0";
         string lastTPBUrl;
 
@@ -34,14 +33,20 @@ namespace Torrent_Parser
             if (oConfigMng.Config.LastTPBUrl != "")
             {
                 lastTPBUrl = oConfigMng.Config.LastTPBUrl;
-                if (lastTPBUrl == null || !TestTPBURL(lastTPBUrl))
+                if (lastTPBUrl == null || !scraper.TestTPBURL(lastTPBUrl))
                 {
-                    lastTPBUrl = GetNewTPBUrl();
+                    string newURL = scraper.GetNewTPBUrl();
+
+                    if (newURL != "")
+                    {
+                        oConfigMng.Config.LastTPBUrl = newURL;
+                        oConfigMng.SaveConfig();
+                    }
                 }
             }
             else
             {
-                lastTPBUrl = GetNewTPBUrl();
+                lastTPBUrl = scraper.GetNewTPBUrl();
                 if (lastTPBUrl == null)
                 {
                     MessageBox.Show("Could not find a proxy site sorry!\nThis app will now close");
@@ -50,97 +55,7 @@ namespace Torrent_Parser
             }
         }
 
-        private bool TestTPBURL(string TPBUrl)
-        {
-            string html = GetHTML(TPBUrl);
-            if (html == null) return false;
-            MatchCollection mc = Regex.Matches(html, @"<title>.*The Pirate Bay.*<\/title>");
-            bool hasMatch = false;
-            foreach (Match m in mc)
-            {
-                hasMatch = true;
-                //Console.WriteLine(m);
-            }
-            return hasMatch;
-        }
 
-        private string GetHTML(string url)
-        {
-            string html = string.Empty;
-
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
-            request.AutomaticDecompression = DecompressionMethods.GZip;
-            try
-            {
-                using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
-                using (Stream stream = response.GetResponseStream())
-                using (StreamReader reader = new StreamReader(stream))
-                {
-                    html = reader.ReadToEnd();
-                }
-            }
-            catch (WebException e)
-            {
-                return null;
-                
-            }
-
-            //Console.WriteLine(html);
-            return html;
-        }
-
-        private string GetNewTPBUrl()
-        {
-            string html = GetHTML(proxyBayUrl);
-            string[] urlList = new string[] { };
-            if (html != null)
-            {
-                try
-                {
-                    urlList = html.Split(new string[] { "\r\n", "\n" }, StringSplitOptions.None).Skip(3).ToArray();
-                    urlList = urlList.Take(urlList.Length - 1).ToArray();
-                }
-                catch
-                {
-                    MessageBox.Show("Failed to parse proxybay list");
-                }
-            }
-            else {
-                html = GetHTML(googleCache);
-                if (html != null)
-                {
-                    try
-                    {
-                        urlList = html.Split(new string[] { "\r\n", "\n" }, StringSplitOptions.None).Skip(5).ToArray();
-                        urlList = urlList.Take(urlList.Length - 1).ToArray();
-                    }
-                    catch
-                    {
-                        MessageBox.Show("Failed to parse google cache of proxybay list");
-                    }
-                }
-            }
-            string newURL = "";
-            foreach (string urlItem in urlList)
-            {
-                if (TestTPBURL(urlItem))
-                {
-                    newURL = urlItem;
-                    break;
-                }
-            }
-            if (newURL != "")
-            {
-                oConfigMng.Config.LastTPBUrl = newURL;
-                oConfigMng.SaveConfig();
-            }
-            else if (oConfigMng.Config.LastTPBUrl != "")
-            {
-                newURL = oConfigMng.Config.LastTPBUrl;
-            }
-            else return null;
-            return newURL;
-        }
 
         private void searchBut_Click(object sender, EventArgs e)
         {
@@ -152,21 +67,23 @@ namespace Torrent_Parser
             {
                 string searchUrl = searchAppendage.Replace("$s", Uri.EscapeUriString(searchText));
                 Console.WriteLine(searchUrl);
-                string html = GetHTML(lastTPBUrl + searchUrl);
-                MatchCollection mc = Regex.Matches(html, @"(<div class=""detName"">.*?<a href=""(?<url>/torrent.*?)"".*?title="".*?>(?<title>.*?)<.*?(?<magnet>magnet.*?)"".*?Uploaded\s(?<date>.*?),.*?<td align=""right"">(?<seeders>.*?)</td>.*?<td align=""right"">(?<leechers>.*?)</td>)", RegexOptions.Singleline);
-                foreach (Match match in mc)
+                MatchCollection mc = scraper.Scrape(lastTPBUrl + searchUrl);
+                if (mc != null)
                 {
-                    int rowId = dataGridView.Rows.Add();
-                    DataGridViewRow row = dataGridView.Rows[rowId];
-                    row.Cells["TitleColumn"].Value = match.Groups["title"].Value;
-                    row.Cells["SeedersColumn"].Value = Convert.ToInt32(match.Groups["seeders"].Value);
-                    row.Cells["LeechersColumn"].Value = Convert.ToInt32(match.Groups["leechers"].Value);
-                    DateTime tmpDate = GetDate(match.Groups["date"].Value);
-                    row.Cells["UploadedColumn"].Value = tmpDate.Date;
-                    row.Cells["MagnetColumn"].Value = match.Groups["magnet"].Value;
-                    row.Cells["URLColumn"].Value = lastTPBUrl + match.Groups["url"].Value;
+                    foreach (Match match in mc)
+                    {
+                        int rowId = dataGridView.Rows.Add();
+                        DataGridViewRow row = dataGridView.Rows[rowId];
+                        row.Cells["TitleColumn"].Value = match.Groups["title"].Value;
+                        row.Cells["SeedersColumn"].Value = Convert.ToInt32(match.Groups["seeders"].Value);
+                        row.Cells["LeechersColumn"].Value = Convert.ToInt32(match.Groups["leechers"].Value);
+                        DateTime tmpDate = GetDate(match.Groups["date"].Value);
+                        row.Cells["UploadedColumn"].Value = tmpDate.Date;
+                        row.Cells["MagnetColumn"].Value = match.Groups["magnet"].Value;
+                        row.Cells["URLColumn"].Value = lastTPBUrl + match.Groups["url"].Value;
+                    }
+                    Console.WriteLine("");
                 }
-                Console.WriteLine("");
             }
 
         }
@@ -358,6 +275,25 @@ namespace Torrent_Parser
             {
                 openMagnetBut.PerformClick();
             }
+            else if(e.KeyCode==Keys.C && e.Modifiers == Keys.Control)
+            {
+                copyMagnet();
+                e.Handled = true;
+            }
+        }
+
+        private void dataGridView_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+
+        }
+
+        private void copyToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            copyMagnet();
+        }
+        private void copyMagnet()
+        {
+            Clipboard.SetText(dataGridView.SelectedCells[0].OwningRow.Cells["MagnetColumn"].Value.ToString());
         }
     }
 }

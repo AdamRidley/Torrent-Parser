@@ -64,6 +64,7 @@ namespace AR.TorrentFinder
                         if (newURL != "")
                         {
                             oConfigMng.Config.LastTPBUrl = newURL;
+                            lastTPBUrl = newURL;
                             oConfigMng.SaveConfig();
                         }
                     }

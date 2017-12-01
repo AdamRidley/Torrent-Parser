@@ -40,6 +40,7 @@ namespace Torrent_Parser
                     if (newURL != "")
                     {
                         oConfigMng.Config.LastTPBUrl = newURL;
+                        lastTPBUrl = newURL;
                         oConfigMng.SaveConfig();
                     }
                 }

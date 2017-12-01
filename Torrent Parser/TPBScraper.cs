@@ -22,16 +22,10 @@ namespace Torrent_Parser
         string googleCache = @"http://webcache.googleusercontent.com/search?q=cache%3Awww.proxybay.one%2Flist.txt";
         public bool TestTPBURL(string TPBUrl)
         {
-            string html = GetHTML(TPBUrl);
+            string html = GetHTML(TPBUrl + "/search/test/0/7/0");
             if (html == null) return false;
             MatchCollection mc = Regex.Matches(html, @"<title>.*The Pirate Bay.*<\/title>");
-            bool hasMatch = false;
-            foreach (Match m in mc)
-            {
-                hasMatch = true;
-                //Console.WriteLine(m);
-            }
-            return hasMatch;
+            return mc.Count > 0;
         }
 
         public string GetHTML(string url)

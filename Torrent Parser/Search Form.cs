@@ -68,23 +68,41 @@ namespace Torrent_Parser
             {
                 string searchUrl = searchAppendage.Replace("$s", Uri.EscapeUriString(searchText));
                 Console.WriteLine(searchUrl);
-                MatchCollection mc = scraper.Scrape(lastTPBUrl + searchUrl);
-                if (mc != null)
+                HtmlAgilityPack.HtmlNodeCollection nc = scraper.Scrape2(lastTPBUrl + searchUrl);
+                if (nc != null)
                 {
-                    foreach (Match match in mc)
+                    foreach(HtmlAgilityPack.HtmlNode node in nc)
                     {
                         int rowId = dataGridView.Rows.Add();
                         DataGridViewRow row = dataGridView.Rows[rowId];
-                        row.Cells["TitleColumn"].Value = match.Groups["title"].Value;
-                        row.Cells["SeedersColumn"].Value = Convert.ToInt32(match.Groups["seeders"].Value);
-                        row.Cells["LeechersColumn"].Value = Convert.ToInt32(match.Groups["leechers"].Value);
+                        row.Cells["TitleColumn"].Value = node.SelectSingleNode(".//a[@class='detLink']").InnerText;
+                        row.Cells["SeedersColumn"].Value = node.SelectSingleNode(".//td[3]").InnerText;
+                        row.Cells["LeechersColumn"].Value = node.SelectSingleNode(".//td[4]").InnerText;
+                        string dateText = node.SelectSingleNode(".//td[2]").SelectSingleNode(".//font").InnerText;
+                        Match match = Regex.Match(dateText, @"\b\w+\s(?<date>.*?),.*?");
                         DateTime tmpDate = GetDate(match.Groups["date"].Value);
                         row.Cells["UploadedColumn"].Value = tmpDate.Date;
-                        row.Cells["MagnetColumn"].Value = match.Groups["magnet"].Value;
-                        row.Cells["URLColumn"].Value = lastTPBUrl + match.Groups["url"].Value;
+                        row.Cells["MagnetColumn"].Value =node.SelectSingleNode(".//a[contains(@href,'magnet:')]").Attributes["href"].Value;
+                        row.Cells["URLColumn"].Value = lastTPBUrl + node.SelectSingleNode(".//a[@class='detLink']").Attributes["href"].Value;
                     }
-                    Console.WriteLine("");
+                    
                 }
+                //if (mc != null)
+                //{
+                //    foreach (Match match in mc)
+                //    {
+                //        int rowId = dataGridView.Rows.Add();
+                //        DataGridViewRow row = dataGridView.Rows[rowId];
+                //        row.Cells["TitleColumn"].Value = match.Groups["title"].Value;
+                //        row.Cells["SeedersColumn"].Value = Convert.ToInt32(match.Groups["seeders"].Value);
+                //        row.Cells["LeechersColumn"].Value = Convert.ToInt32(match.Groups["leechers"].Value);
+                //        DateTime tmpDate = GetDate(match.Groups["date"].Value);
+                //        row.Cells["UploadedColumn"].Value = tmpDate.Date;
+                //        row.Cells["MagnetColumn"].Value = match.Groups["magnet"].Value;
+                //        row.Cells["URLColumn"].Value = lastTPBUrl + match.Groups["url"].Value;
+                //    }
+                //    Console.WriteLine("");
+                //}
             }
 
         }
@@ -171,73 +189,16 @@ namespace Torrent_Parser
                     string rootURL = "http://" + oConfigMng.Config.RemoteServer + ":" + oConfigMng.Config.RemotePort.ToString();
                     string username = oConfigMng.Config.RemoteUsername;
                     string password = oConfigMng.Config.RemotePassword;
-                    string formParams = "username=" + Uri.EscapeDataString(username) + "&password=" + Uri.EscapeDataString(password);
-                    HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(rootURL + "/login");
-                    httpWebRequest.ContentType = "application/x-www-form-urlencoded; charset=utf-8";
-                    httpWebRequest.Method = "POST";
-                    byte[] bytes = Encoding.ASCII.GetBytes(formParams);
-                    httpWebRequest.ContentLength = bytes.Length;
-                    httpWebRequest.Timeout = 2000;
-                    HttpWebResponse resp=null;
-                    try
+                    switch (oConfigMng.Config.RemoteType)
                     {
-                        using (Stream os = httpWebRequest.GetRequestStream())
-                        {
-                            os.Write(bytes, 0, bytes.Length);
-                        }
-                    }
-                    catch (System.Net.WebException ex)
-                    {
-                        if (ex.Status == System.Net.WebExceptionStatus.Timeout)
-                        {
-                            Console.WriteLine(ex.Message);
-                        }
-                        else{
-                            throw ;
-                        }
-                    }
-
-                    using (resp = (HttpWebResponse)httpWebRequest.GetResponse()) { 
-                        if (resp == null || resp.StatusCode == HttpStatusCode.OK)
-                        {
-
-                            string cookieHeader = "";
-
-                            if (resp != null)
-                            {
-                                cookieHeader = resp.Headers["Set-cookie"];
-                            }
-
-
-                            httpWebRequest = (HttpWebRequest)WebRequest.Create(rootURL + "/command/download");
-                            httpWebRequest.ContentType = "application/x-www-form-urlencoded";
-                            httpWebRequest.Method = "POST";
-                            httpWebRequest.Headers.Add("Cookie", cookieHeader);
-                            string message = "urls=" + Uri.EscapeUriString(magnet);
-                            byte[] bytes2 = Encoding.ASCII.GetBytes(message);
-                            httpWebRequest.ContentLength = bytes2.Length;
-                            using (Stream os = httpWebRequest.GetRequestStream())
-                            {
-                                os.Write(bytes2, 0, bytes2.Length);
-                                os.Flush();
-                                os.Close();
-                            }
-                            using (HttpWebResponse resp2 = (HttpWebResponse)httpWebRequest.GetResponse())
-                            {
-                                if (resp2.StatusCode == HttpStatusCode.OK)
-                                {
-                                    MessageBox.Show("Torrent Sent Successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                                }
-                                else
-                                {
-                                    MessageBox.Show("Send Failed:\nRecieved Code: " + resp.StatusCode + " " + resp.StatusDescription, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                                }
-                            }
-                        }
-                        else
-                        {
-                            MessageBox.Show("Login Failed:\nRecieved Code: " + resp.StatusCode + " " + resp.StatusDescription, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        }
+                        case "qBittorrent":
+                            RemoteClient.SendQBittorrent(magnet, rootURL, username, password);
+                            break;
+                        case "Transmission":
+                            RemoteClient.SendTransmission(magnet, rootURL, username, password,"");
+                            break;
+                        default:
+                            break;
                     }
                 }
             }
@@ -276,7 +237,7 @@ namespace Torrent_Parser
             {
                 openMagnetBut.PerformClick();
             }
-            else if(e.KeyCode==Keys.C && e.Modifiers == Keys.Control)
+            else if (e.KeyCode == Keys.C && e.Modifiers == Keys.Control)
             {
                 copyMagnet();
                 e.Handled = true;

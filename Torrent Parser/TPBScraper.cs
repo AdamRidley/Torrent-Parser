@@ -98,7 +98,16 @@ namespace Torrent_Parser
         public MatchCollection Scrape (string url)
         {
             string html = GetHTML(url);
-            return Regex.Matches(html, @"(<div class=""detName"">.*?<a href=""(?<url>/torrent.*?)"".*?title="".*?>(?<title>.*?)<.*?(?<magnet>magnet.*?)"".*?Uploaded\s(?<date>.*?),.*?<td align=""right"">(?<seeders>.*?)</td>.*?<td align=""right"">(?<leechers>.*?)</td>)", RegexOptions.Singleline);
+            return Regex.Matches(html, @"(<div class=""detName"">.*?<a href=""(?<url>/torrent.*?)"".*?title="".*?>(?<title>.*?)<.*?(?<magnet>magnet.*?)"".*?Uploaded\s(?<date>.*?),.*?<td align=""right"">(?<seeders>.*?)</td>.*?<td align=""right"">(?<leechers>.*?)</td>)", RegexOptions.Singleline,TimeSpan.FromSeconds(10));
+        }
+        public HtmlAgilityPack.HtmlNodeCollection Scrape2(string url)
+        {
+            string html = GetHTML(url);
+            HtmlAgilityPack.HtmlDocument doc = new HtmlAgilityPack.HtmlDocument();
+            doc.LoadHtml(html);
+            HtmlAgilityPack.HtmlNode n = doc.DocumentNode.SelectSingleNode("//table[@id='searchResult']");
+            HtmlAgilityPack.HtmlNodeCollection nc = n.SelectNodes("//tr[not(@class='header')]");
+            return nc;
         }
     }
 }

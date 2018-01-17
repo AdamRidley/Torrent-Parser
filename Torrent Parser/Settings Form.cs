@@ -52,6 +52,10 @@ namespace Torrent_Parser
             oConfigMng.SaveConfig();
             this.DialogResult = DialogResult.OK;
         }
-        
+
+        private void typeComboBox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+
+        }
     }
 }

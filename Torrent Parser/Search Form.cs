@@ -68,7 +68,7 @@ namespace Torrent_Parser
             {
                 string searchUrl = searchAppendage.Replace("$s", Uri.EscapeUriString(searchText));
                 Console.WriteLine(searchUrl);
-                HtmlAgilityPack.HtmlNodeCollection nc = scraper.Scrape2(lastTPBUrl + searchUrl);
+                HtmlAgilityPack.HtmlNodeCollection nc = scraper.Scrape(lastTPBUrl + searchUrl);
                 if (nc != null)
                 {
                     foreach(HtmlAgilityPack.HtmlNode node in nc)
@@ -87,22 +87,6 @@ namespace Torrent_Parser
                     }
                     
                 }
-                //if (mc != null)
-                //{
-                //    foreach (Match match in mc)
-                //    {
-                //        int rowId = dataGridView.Rows.Add();
-                //        DataGridViewRow row = dataGridView.Rows[rowId];
-                //        row.Cells["TitleColumn"].Value = match.Groups["title"].Value;
-                //        row.Cells["SeedersColumn"].Value = Convert.ToInt32(match.Groups["seeders"].Value);
-                //        row.Cells["LeechersColumn"].Value = Convert.ToInt32(match.Groups["leechers"].Value);
-                //        DateTime tmpDate = GetDate(match.Groups["date"].Value);
-                //        row.Cells["UploadedColumn"].Value = tmpDate.Date;
-                //        row.Cells["MagnetColumn"].Value = match.Groups["magnet"].Value;
-                //        row.Cells["URLColumn"].Value = lastTPBUrl + match.Groups["url"].Value;
-                //    }
-                //    Console.WriteLine("");
-                //}
             }
 
         }

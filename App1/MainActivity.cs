@@ -1,7 +1,6 @@
 ﻿using System;
 using Android.App;
 using Android.Content;
-using Android.Runtime;
 using Android.Views;
 using Android.Widget;
 using Android.OS;
@@ -19,13 +18,15 @@ namespace AR.TorrentFinder
         DataTable dataTable;
         Torrent_Parser.CConfigMng oConfigMng = new Torrent_Parser.CConfigMng();
         Torrent_Parser.TPBScraper scraper = new Torrent_Parser.TPBScraper();
+        string debugLog;
 
         protected override void OnCreate(Bundle bundle)
         {
             Window.RequestFeature(WindowFeatures.NoTitle);
             base.OnCreate(bundle);
-            
+
             // Set our view from the "main" layout resource
+            Log("start");
             SetContentView(Resource.Layout.Main);
 
             //Get the textbox and attach edit event to it
@@ -48,21 +49,29 @@ namespace AR.TorrentFinder
             dataTable.SetColumnCollapsed(4, true);
             dataTable.SetColumnCollapsed(5, true);
             scrollView.AddView(dataTable);
+            Log("load config - 52");
             oConfigMng.LoadConfig();
 
+            Log("process config - 55");
             if (bundle is null || bundle.GetString("tpbUrl") is null)
             {
                 //If opening for first time
                 //Config Loading Code & Find working TPB Proxy
+
+                Log("first open - 61");
                 if (oConfigMng.Config.LastTPBUrl != "")
                 {
                     lastTPBUrl = oConfigMng.Config.LastTPBUrl;
                     if (lastTPBUrl == null || !scraper.TestTPBURL(lastTPBUrl))
                     {
-                        string newURL = scraper.GetNewTPBUrl();
+
+                        Log("find new url - 68");
+                        string newURL = scraper.GetNewTPBUrl(out string logText);
+                        Log(logText + "finished - 70");
 
                         if (newURL != "")
                         {
+                            Log("new url: " + newURL + " - 73");
                             oConfigMng.Config.LastTPBUrl = newURL;
                             lastTPBUrl = newURL;
                             oConfigMng.SaveConfig();
@@ -71,12 +80,19 @@ namespace AR.TorrentFinder
                 }
                 else
                 {
-                    lastTPBUrl = scraper.GetNewTPBUrl();
+                    lastTPBUrl = scraper.GetNewTPBUrl(out string logText);
+                    Log(logText + "finished - 70");
                     if (lastTPBUrl == null)
                     {
                         Message("Could not find a proxy site sorry!\nThis app will now close");
                         //MessageBox.Show("Could not find a proxy site sorry!\nThis app will now close");
                         (Xamarin.Forms.Forms.Context as Activity).Finish();
+                    }
+                    else
+                    {
+                        Log("new url: " + lastTPBUrl + " - 91");
+                        oConfigMng.Config.LastTPBUrl = lastTPBUrl;
+                        oConfigMng.SaveConfig();
                     }
                 }
             }
@@ -84,15 +100,18 @@ namespace AR.TorrentFinder
             {
                 //If resuming from rotation
                 lastTPBUrl = bundle.GetString("tpbUrl");
+                Log("found previous url "+lastTPBUrl+" - 101");
             }
             if (bundle == null || bundle.GetString("searchResults") == null)
             {
                 //If first time running
+                Log("no previous results - 106");
                 searchText.RequestFocus();
             }
             else
             {
                 //If resuming from rotation
+                Log("displaying old result - 112");
                 searchResults = Newtonsoft.Json.JsonConvert.DeserializeObject<List<SearchResult>>(bundle.GetString("searchResults"));
             }
             UpdateTable();
@@ -100,9 +119,11 @@ namespace AR.TorrentFinder
 
         protected override void OnSaveInstanceState(Bundle outState)
         {
-            base.OnSaveInstanceState(outState);
+            Log("saving instance state - 120");
+            oConfigMng.SaveConfig();
             outState.PutString("tpbUrl", lastTPBUrl);
             outState.PutString("searchResults", Newtonsoft.Json.JsonConvert.SerializeObject(searchResults));
+            base.OnSaveInstanceState(outState);
         }
 
         void SearchText_EditorAction(object sender, TextView.EditorActionEventArgs e)
@@ -125,6 +146,7 @@ namespace AR.TorrentFinder
 
         void Search(string searchString)
         {
+            Log("search for " + searchString + " - 147");
             DismissKeyboard();
             FindViewById<LinearLayout>(Resource.Id.linearLayout1).RequestFocus();
             //Get Search result and Parse Data
@@ -135,27 +157,50 @@ namespace AR.TorrentFinder
             if (searchString != "")
             {
                 string searchUrl = searchAppendage.Replace("$s", Uri.EscapeUriString(searchString));
-                MatchCollection mc = scraper.Scrape(lastTPBUrl + searchUrl);
-                if (mc != null)
+                //MatchCollection mc = scraper.Scrapeold(lastTPBUrl + searchUrl);
+                //if (mc != null)
+                //{
+                //    searchResults = new List<SearchResult>();
+                //    foreach (Match match in mc)
+                //    {
+                //        searchResults.Add(new SearchResult(match.Groups["title"].Value, Convert.ToInt32(match.Groups["seeders"].Value), Convert.ToInt32(match.Groups["leechers"].Value), GetDate(match.Groups["date"].Value), match.Groups["magnet"].Value, lastTPBUrl + match.Groups["url"].Value));
+                //    }
+                //}
+                Log("scrape - 167");
+                HtmlAgilityPack.HtmlNodeCollection nc = scraper.Scrape(lastTPBUrl + searchUrl,out String logText);
+                Log(logText +"finished - 169");
+                Log("populate search array - 170");
+                if (nc != null)
                 {
+                    Log(nc.Count.ToString() + " results - 173");
                     searchResults = new List<SearchResult>();
-                    foreach (Match match in mc)
+                    foreach (HtmlAgilityPack.HtmlNode node in nc)
                     {
-                        searchResults.Add(new SearchResult(match.Groups["title"].Value, Convert.ToInt32(match.Groups["seeders"].Value), Convert.ToInt32(match.Groups["leechers"].Value), GetDate(match.Groups["date"].Value), match.Groups["magnet"].Value, lastTPBUrl + match.Groups["url"].Value));
+                        string title = node.SelectSingleNode(".//a[@class='detLink']").InnerText;
+                        int seeders = Int32.Parse(node.SelectSingleNode(".//td[3]").InnerText);
+                        int leechers = Int32.Parse(node.SelectSingleNode(".//td[4]").InnerText);
+                        string dateText = node.SelectSingleNode(".//td[2]").SelectSingleNode(".//font").InnerText;
+                        Match match = Regex.Match(dateText, @"\b\w+\s(?<date>.*?),.*?");
+                        DateTime date = GetDate(match.Groups["date"].Value);
+                        string magnet = node.SelectSingleNode(".//a[contains(@href,'magnet:')]").Attributes["href"].Value;
+                        string url = lastTPBUrl + node.SelectSingleNode(".//a[@class='detLink']").Attributes["href"].Value;
+                        searchResults.Add(new SearchResult(title, seeders, leechers,date, magnet, url));
                     }
                 }
+                Log("finished - 188");
                 UpdateTable();
             }
         }
         void UpdateTable()
         {
+            Log("update table - 194");
             dataTable.ResetTable();
             if (searchResults is null) return;
             foreach (SearchResult sr in searchResults)
             {
                 dataTable.AddRow(new String[] { sr.Title, sr.Seeders.ToString(), sr.Leechers.ToString(), sr.Uploaded.Date.ToString("dd/MM/yy"), sr.Magnet, sr.Url });
             }
-
+            Log("finished - 201");
         }
         public void Message(string msg)
         {
@@ -202,6 +247,13 @@ namespace AR.TorrentFinder
             }
 
             return tmpDate;
+        }
+        void Log(string txt)
+        {
+            TimeSpan elapsedTime = DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime;
+            debugLog += elapsedTime.TotalSeconds.ToString()+"."+elapsedTime.Milliseconds.ToString();
+            debugLog += txt + "\r\n";
+            oConfigMng.Config.LatestLog = debugLog;
         }
     }
     public class DataTable:TableLayout

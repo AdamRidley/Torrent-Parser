@@ -17,6 +17,7 @@ namespace Torrent_Parser
         private string m_oRemoteUsername;
         private string m_oRemotePassword;
         private string m_oRemoteType;
+        private string m_oLatestLog;
 
         public string LastTPBUrl
         {
@@ -52,6 +53,11 @@ namespace Torrent_Parser
         {
             get { return m_oRemoteType; }
             set { m_oRemoteType = value; }
+        }
+        public string LatestLog
+        {
+            get { return m_oLatestLog; }
+            set { m_oLatestLog = value; }
         }
     }
 

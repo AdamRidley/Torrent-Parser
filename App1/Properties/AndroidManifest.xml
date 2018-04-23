@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="AR.TorrentFinder" android:versionName="1.0" android:installLocation="auto" android:versionCode="2">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="AR.TorrentFinder" android:versionName="1.0" android:installLocation="auto" android:versionCode="5">
 	<uses-sdk android:minSdkVersion="16" />
 	<uses-permission android:name="android.permission.INTERNET" />
-	<application android:label="mstsc" android:icon="@mipmap/ic_launcher"></application>
+	<application android:label="Torrent Finder" android:icon="@mipmap/ic_launcher"></application>
 </manifest>
